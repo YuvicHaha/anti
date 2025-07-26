@@ -235,23 +235,34 @@ async def add(ctx, target: discord.User, roblox_id: int):
         return
     try:
         content, sha = get_premium_file()
-        if f"[{roblox_id}]" in content:
+        lines = content.splitlines()
+
+        # Check if ID is already present
+        if any(f"[{roblox_id}]" in line for line in lines):
             await ctx.send("⚠️ That Roblox ID is already registered.")
             return
 
-        insert_index = content.find("return getgenv().ownerIDs")
-        if insert_index == -1:
-            await ctx.send("❌ Invalid file structure.")
+        # Find closing brace of Lua table
+        insert_index = None
+        for i in reversed(range(len(lines))):
+            if lines[i].strip() == "}":
+                insert_index = i
+                break
+
+        if insert_index is None:
+            await ctx.send("❌ Invalid Lua table structure: missing `}`.")
             return
 
-        before_return = content[:insert_index].rstrip().rstrip("}")
-        new_line = f"    [{roblox_id}] = {target.id},\n"
-        new_content = before_return + new_line + "}\n\nreturn getgenv().ownerIDs"
+        # Insert new line
+        new_line = f"    [{roblox_id}] = {target.id},"
+        lines.insert(insert_index, new_line)
+        new_content = "\n".join(lines)
 
         update_premium_file(new_content, sha, message=f"{ctx.author} added {roblox_id} for {target}")
         await ctx.send(f"✅ Added Roblox ID `{roblox_id}` for <@{target.id}>")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
+
 
 @bot.command(name="replace")
 async def replace(ctx, oldid: int, newid: int):
