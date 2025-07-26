@@ -26,6 +26,8 @@ REPO = "yuvic123/StandLIST"
 FILE_PATH = "list"
 FILE_PATH_BYPASS = "Stand%20Bypass%20Premium"
 BRANCH = "main"
+NEW_REPO = "yuvic123/list"
+NEW_FILE_PATH = "list"
 
 # === GitHub Headers ===
 headers = {
@@ -69,6 +71,28 @@ def get_bypass_file():
     content = base64.b64decode(data["content"]).decode()
     sha = data["sha"]
     return content, sha
+
+def get_premium_file():
+    url = f"https://api.github.com/repos/{NEW_REPO}/contents/{NEW_FILE_PATH}?ref={BRANCH}"
+    res = requests.get(url, headers=headers)
+    res.raise_for_status()
+    data = res.json()
+    content = base64.b64decode(data["content"]).decode()
+    sha = data["sha"]
+    return content, sha
+
+def update_premium_file(new_content, sha, message="Updated Premium List"):
+    url = f"https://api.github.com/repos/{NEW_REPO}/contents/{NEW_FILE_PATH}"
+    encoded_content = base64.b64encode(new_content.encode()).decode()
+    data = {
+        "message": message,
+        "content": encoded_content,
+        "sha": sha,
+        "branch": BRANCH
+    }
+    res = requests.put(url, headers=headers, json=data)
+    res.raise_for_status()
+    return res.json()
 
 def update_bypass_file(new_content, sha, message="Updated Stand Bypass Premium list"):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH_BYPASS}"
@@ -203,6 +227,114 @@ async def antiremove(ctx, roblox_id: int):
         await ctx.send(f"✅ Removed Roblox ID `{roblox_id}` from the list.")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
+
+@bot.command(name="add")
+async def add(ctx, target: discord.User, roblox_id: int):
+    if ctx.author.id not in allowed_users:
+        await ctx.send("❌ You are not authorized to use this command.")
+        return
+    try:
+        content, sha = get_premium_file()
+        if f"[{roblox_id}]" in content:
+            await ctx.send("⚠️ That Roblox ID is already registered.")
+            return
+
+        insert_index = content.find("return getgenv().ownerIDs")
+        if insert_index == -1:
+            await ctx.send("❌ Invalid file structure.")
+            return
+
+        before_return = content[:insert_index].rstrip().rstrip("}")
+        new_line = f"    [{roblox_id}] = {target.id},\n"
+        new_content = before_return + new_line + "}\n\nreturn getgenv().ownerIDs"
+
+        update_premium_file(new_content, sha, message=f"{ctx.author} added {roblox_id} for {target}")
+        await ctx.send(f"✅ Added Roblox ID `{roblox_id}` for <@{target.id}>")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error: {e}")
+
+@bot.command(name="replace")
+async def replace(ctx, oldid: int, newid: int):
+    discord_id = str(ctx.author.id)
+    try:
+        content, sha = get_premium_file()
+        lines = content.splitlines()
+        found = False
+        new_lines = []
+
+        if f"[{newid}]" in content:
+            await ctx.send("⚠️ That new Roblox ID is already registered.")
+            return
+
+        for line in lines:
+            if f"[{oldid}]" in line and f"= {discord_id}" in line:
+                new_line = f"    [{newid}] = {discord_id},"
+                new_lines.append(new_line)
+                found = True
+            else:
+                new_lines.append(line)
+
+        if not found:
+            await ctx.send("❌ You can only replace your own Roblox ID.")
+            return
+
+        new_content = "\n".join(new_lines)
+        update_premium_file(new_content, sha, message=f"{ctx.author} replaced {oldid} with {newid}")
+        await ctx.send(f"✅ Replaced `{oldid}` with `{newid}` successfully!")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error: {e}")
+
+@bot.command(name="remove")
+async def remove(ctx, roblox_id: int):
+    if ctx.author.id not in allowed_users:
+        await ctx.send("❌ You are not authorized to use this command.")
+        return
+    try:
+        content, sha = get_premium_file()
+        lines = content.splitlines()
+        found = False
+        new_lines = []
+
+        for line in lines:
+            if line.strip().startswith(f"[{roblox_id}] ="):
+                found = True
+                continue
+            new_lines.append(line)
+
+        if not found:
+            await ctx.send("⚠️ Roblox ID not found in the premium list.")
+            return
+
+        new_content = "\n".join(new_lines)
+        update_premium_file(new_content, sha, message=f"{ctx.author} removed {roblox_id} from premium list")
+        await ctx.send(f"✅ Removed Roblox ID `{roblox_id}` from the premium list.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error: {e}")
+
+@bot.command(name="premiumcheck")
+async def premiumcheck(ctx):
+    discord_id = str(ctx.author.id)
+    try:
+        content, _ = get_premium_file()
+        lines = content.splitlines()
+        for line in lines:
+            if f"= {discord_id}" in line:
+                roblox_id = line.split("]")[0].replace("[", "").strip()
+                res = requests.get(f"https://users.roblox.com/v1/users/{roblox_id}")
+                if res.status_code == 200:
+                    data = res.json()
+                    username = data.get("name", "Unknown")
+                    embed = discord.Embed(title="Your Premium Roblox ID", color=discord.Color.green())
+                    embed.add_field(name="Roblox ID", value=f"`{roblox_id}`", inline=False)
+                    embed.add_field(name="Username", value=f"**{username}**", inline=False)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send(f"⚠️ Roblox ID `{roblox_id}` found, but failed to fetch username.")
+                return
+        await ctx.send("❌ You don't have any Roblox ID registered in the premium list.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error: {e}")
+
 
 @bot.command(name="addbypass")
 async def addbypass(ctx, target: discord.User, roblox_id: int):
