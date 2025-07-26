@@ -23,6 +23,7 @@ threading.Thread(target=run_health).start()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 print("DISCORD_TOKEN:", len(DISCORD_TOKEN))  # should be around 59 characters
+print("GITHUB_TOKEN:", len(GITHUB_TOKEN))  # should be around 59 characters
 REPO = "yuvic123/StandLIST"
 FILE_PATH = "list"
 FILE_PATH_BYPASS = "Stand%20Bypass%20Premium"
