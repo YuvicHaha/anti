@@ -26,8 +26,6 @@ REPO = "yuvic123/StandLIST"
 FILE_PATH = "list"
 FILE_PATH_BYPASS = "Stand%20Bypass%20Premium"
 BRANCH = "main"
-NEW_REPO = "yuvic123/list"
-NEW_FILE_PATH = "list"
 
 # === GitHub Headers ===
 headers = {
@@ -72,28 +70,6 @@ def get_bypass_file():
     sha = data["sha"]
     return content, sha
 
-def get_premium_file():
-    url = f"https://api.github.com/repos/{NEW_REPO}/contents/{NEW_FILE_PATH}?ref={BRANCH}"
-    res = requests.get(url, headers=headers)
-    res.raise_for_status()
-    data = res.json()
-    content = base64.b64decode(data["content"]).decode()
-    sha = data["sha"]
-    return content, sha
-
-def update_premium_file(new_content, sha, message="Updated Premium List"):
-    url = f"https://api.github.com/repos/{NEW_REPO}/contents/{NEW_FILE_PATH}"
-    encoded_content = base64.b64encode(new_content.encode()).decode()
-    data = {
-        "message": message,
-        "content": encoded_content,
-        "sha": sha,
-        "branch": BRANCH
-    }
-    res = requests.put(url, headers=headers, json=data)
-    res.raise_for_status()
-    return res.json()
-
 def update_bypass_file(new_content, sha, message="Updated Stand Bypass Premium list"):
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH_BYPASS}"
     encoded_content = base64.b64encode(new_content.encode()).decode()
@@ -125,7 +101,7 @@ async def on_message(message):
         try:
             args = message.content.split()
             if len(args) != 3:
-                await message.channel.send("⚠️ Usage: `.antirep <oldid> <newid>`")
+                await message.channel.send("⚠️ Usage: .antirep <oldid> <newid>")
                 return
             oldid = int(args[1])
             newid = int(args[2])
@@ -149,7 +125,7 @@ async def on_message(message):
                 return
             new_content = "\n".join(updated_lines)
             update_file(new_content, sha, message=f"{message.author} replaced {oldid} with {newid}")
-            await message.channel.send(f"✅ Replaced `{oldid}` with `{newid}` successfully!")
+            await message.channel.send(f"✅ Replaced {oldid} with {newid} successfully!")
         except Exception as e:
             await message.channel.send(f"⚠️ Error: {e}")
     await bot.process_commands(message)
@@ -168,11 +144,11 @@ async def anticheck(ctx):
                     data = res.json()
                     username = data.get("name", "Unknown")
                     embed = discord.Embed(title="Your Anti Stand is Linked To", color=discord.Color.purple())
-                    embed.add_field(name="Roblox ID", value=f"`{roblox_id}`", inline=False)
+                    embed.add_field(name="Roblox ID", value=f"{roblox_id}", inline=False)
                     embed.add_field(name="Username", value=f"**{username}**", inline=False)
                     await ctx.send(embed=embed)
                 else:
-                    await ctx.send(f"⚠️ Found Roblox ID `{roblox_id}`, but failed to get username.")
+                    await ctx.send(f"⚠️ Found Roblox ID {roblox_id}, but failed to get username.")
                 return
         await ctx.send("❌ You don't have any Roblox ID registered.")
     except Exception as e:
@@ -194,13 +170,13 @@ async def addanti(ctx, target: discord.User, roblox_id: int):
                 insert_index = i
                 break
         else:
-            await ctx.send("❌ Invalid Lua file structure: missing closing `}`.")
+            await ctx.send("❌ Invalid Lua file structure: missing closing }.")
             return
         new_line = f"    {roblox_id},     --- {target.id}"
         lines.insert(insert_index, new_line)
         new_content = "\n".join(lines)
         update_file(new_content, sha, message=f"{ctx.author} added {roblox_id} for {target}")
-        await ctx.send(f"✅ Added Roblox ID `{roblox_id}` for <@{target.id}>")
+        await ctx.send(f"✅ Added Roblox ID {roblox_id} for <@{target.id}>")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
 
@@ -224,128 +200,9 @@ async def antiremove(ctx, roblox_id: int):
             return
         new_content = "\n".join(new_lines)
         update_file(new_content, sha, message=f"{ctx.author} removed {roblox_id}")
-        await ctx.send(f"✅ Removed Roblox ID `{roblox_id}` from the list.")
+        await ctx.send(f"✅ Removed Roblox ID {roblox_id} from the list.")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
-
-@bot.command(name="add")
-async def add(ctx, target: discord.User, roblox_id: int):
-    if ctx.author.id not in allowed_users:
-        await ctx.send("❌ You are not authorized to use this command.")
-        return
-    try:
-        content, sha = get_premium_file()
-        lines = content.splitlines()
-
-        # Check if ID is already present
-        if any(f"[{roblox_id}]" in line for line in lines):
-            await ctx.send("⚠️ That Roblox ID is already registered.")
-            return
-
-        # Find closing brace of Lua table
-        insert_index = None
-        for i in reversed(range(len(lines))):
-            if lines[i].strip() == "}":
-                insert_index = i
-                break
-
-        if insert_index is None:
-            await ctx.send("❌ Invalid Lua table structure: missing `}`.")
-            return
-
-        # Insert new line
-        new_line = f"    [{roblox_id}] = {target.id},"
-        lines.insert(insert_index, new_line)
-        new_content = "\n".join(lines)
-
-        update_premium_file(new_content, sha, message=f"{ctx.author} added {roblox_id} for {target}")
-        await ctx.send(f"✅ Added Roblox ID `{roblox_id}` for <@{target.id}>")
-    except Exception as e:
-        await ctx.send(f"⚠️ Error: {e}")
-
-
-@bot.command(name="replace")
-async def replace(ctx, oldid: int, newid: int):
-    discord_id = str(ctx.author.id)
-    try:
-        content, sha = get_premium_file()
-        lines = content.splitlines()
-        found = False
-        new_lines = []
-
-        if f"[{newid}]" in content:
-            await ctx.send("⚠️ That new Roblox ID is already registered.")
-            return
-
-        for line in lines:
-            if f"[{oldid}]" in line and f"= {discord_id}" in line:
-                new_line = f"    [{newid}] = {discord_id},"
-                new_lines.append(new_line)
-                found = True
-            else:
-                new_lines.append(line)
-
-        if not found:
-            await ctx.send("❌ You can only replace your own Roblox ID.")
-            return
-
-        new_content = "\n".join(new_lines)
-        update_premium_file(new_content, sha, message=f"{ctx.author} replaced {oldid} with {newid}")
-        await ctx.send(f"✅ Replaced `{oldid}` with `{newid}` successfully!")
-    except Exception as e:
-        await ctx.send(f"⚠️ Error: {e}")
-
-@bot.command(name="remove")
-async def remove(ctx, roblox_id: int):
-    if ctx.author.id not in allowed_users:
-        await ctx.send("❌ You are not authorized to use this command.")
-        return
-    try:
-        content, sha = get_premium_file()
-        lines = content.splitlines()
-        found = False
-        new_lines = []
-
-        for line in lines:
-            if line.strip().startswith(f"[{roblox_id}] ="):
-                found = True
-                continue
-            new_lines.append(line)
-
-        if not found:
-            await ctx.send("⚠️ Roblox ID not found in the premium list.")
-            return
-
-        new_content = "\n".join(new_lines)
-        update_premium_file(new_content, sha, message=f"{ctx.author} removed {roblox_id} from premium list")
-        await ctx.send(f"✅ Removed Roblox ID `{roblox_id}` from the premium list.")
-    except Exception as e:
-        await ctx.send(f"⚠️ Error: {e}")
-
-@bot.command(name="premiumcheck")
-async def premiumcheck(ctx):
-    discord_id = str(ctx.author.id)
-    try:
-        content, _ = get_premium_file()
-        lines = content.splitlines()
-        for line in lines:
-            if f"= {discord_id}" in line:
-                roblox_id = line.split("]")[0].replace("[", "").strip()
-                res = requests.get(f"https://users.roblox.com/v1/users/{roblox_id}")
-                if res.status_code == 200:
-                    data = res.json()
-                    username = data.get("name", "Unknown")
-                    embed = discord.Embed(title="Your Premium Roblox ID", color=discord.Color.green())
-                    embed.add_field(name="Roblox ID", value=f"`{roblox_id}`", inline=False)
-                    embed.add_field(name="Username", value=f"**{username}**", inline=False)
-                    await ctx.send(embed=embed)
-                else:
-                    await ctx.send(f"⚠️ Roblox ID `{roblox_id}` found, but failed to fetch username.")
-                return
-        await ctx.send("❌ You don't have any Roblox ID registered in the premium list.")
-    except Exception as e:
-        await ctx.send(f"⚠️ Error: {e}")
-
 
 @bot.command(name="addbypass")
 async def addbypass(ctx, target: discord.User, roblox_id: int):
@@ -363,13 +220,13 @@ async def addbypass(ctx, target: discord.User, roblox_id: int):
                 insert_index = i
                 break
         else:
-            await ctx.send("❌ Invalid Lua file structure: missing closing `}`.")
+            await ctx.send("❌ Invalid Lua file structure: missing closing }.")
             return
         new_line = f"    {roblox_id},     --- {target.id}"
         lines.insert(insert_index, new_line)
         new_content = "\n".join(lines)
         update_bypass_file(new_content, sha, message=f"{ctx.author} added bypass {roblox_id} for {target}")
-        await ctx.send(f"✅ Bypass ID `{roblox_id}` added for <@{target.id}>")
+        await ctx.send(f"✅ Bypass ID {roblox_id} added for <@{target.id}>")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
 
@@ -387,11 +244,11 @@ async def bypasscheck(ctx):
                     data = res.json()
                     username = data.get("name", "Unknown")
                     embed = discord.Embed(title="Your Stand Bypass Premium ID", color=discord.Color.gold())
-                    embed.add_field(name="Roblox ID", value=f"`{roblox_id}`", inline=False)
+                    embed.add_field(name="Roblox ID", value=f"{roblox_id}", inline=False)
                     embed.add_field(name="Username", value=f"**{username}**", inline=False)
                     await ctx.send(embed=embed)
                 else:
-                    await ctx.send(f"⚠️ Roblox ID `{roblox_id}` found, but username lookup failed.")
+                    await ctx.send(f"⚠️ Roblox ID {roblox_id} found, but username lookup failed.")
                 return
         await ctx.send("❌ You don't have any Roblox ID registered in the bypass list.")
     except Exception as e:
@@ -420,7 +277,7 @@ async def bypassreplace(ctx, oldid: int, newid: int):
             return
         new_content = "\n".join(updated_lines)
         update_bypass_file(new_content, sha, message=f"{ctx.author} replaced bypass {oldid} with {newid}")
-        await ctx.send(f"✅ Replaced bypass ID `{oldid}` with `{newid}` successfully!")
+        await ctx.send(f"✅ Replaced bypass ID {oldid} with {newid} successfully!")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
 
@@ -444,7 +301,7 @@ async def bypassremove(ctx, roblox_id: int):
             return
         new_content = "\n".join(new_lines)
         update_bypass_file(new_content, sha, message=f"{ctx.author} removed bypass {roblox_id}")
-        await ctx.send(f"✅ Removed bypass ID `{roblox_id}` from the list.")
+        await ctx.send(f"✅ Removed bypass ID {roblox_id} from the list.")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
 
