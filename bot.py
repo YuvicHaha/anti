@@ -24,7 +24,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO = "yuvic123/StandLIST"
 FILE_PATH = "list"
-FILE_PATH_BYPASS = "bypass_list"
+FILE_PATH_BYPASS = "Stand%20Bypass%20Premium"
 BRANCH = "main"
 
 # === GitHub Headers ===
